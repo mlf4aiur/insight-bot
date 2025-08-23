@@ -1,0 +1,50 @@
+{
+  "mock":
+  {
+    "command": "python3",
+    "args":
+    [
+      "app/mcp_servers/mock.py"
+    ],
+    "transport": "stdio",
+    "env":
+    {
+      "USER_SERVICE_URL": "http://localhost:5001"
+    }
+  },
+  "jaeger": {
+    "command": "python3",
+    "args": [
+      "app/mcp_servers/jaeger.py"
+    ],
+    "transport": "stdio",
+    "env": {
+      "JAEGER_URL": "http://localhost:16686"
+    }
+  },
+  "loki": {
+    "command": "python3",
+    "args": [
+      "app/mcp_servers/loki.py"
+    ],
+    "transport": "stdio",
+    "env": {
+      "LOKI_URL": "http://localhost:3100"
+    }
+  },
+  "prometheus": {
+    "command": "docker",
+    "args": [
+      "run",
+      "-i",
+      "--rm",
+      "-e",
+      "PROMETHEUS_URL",
+      "ghcr.io/pab1it0/prometheus-mcp-server:latest"
+    ],
+    "transport": "stdio",
+    "env": {
+      "PROMETHEUS_URL": "http://host.docker.internal:9090"
+    }
+  }
+}

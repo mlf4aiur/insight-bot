@@ -1,0 +1,38 @@
+# Python specific
+__pycache__/
+*.pyc
+*.pytest_cache/
+.venv/
+env/
+venv/
+pip-cache/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Git
+.git/
+.gitignore
+
+# Logs and temporary files
+*.log
+tmp/
+temp/
+
+# Configuration files (if not needed in the image)
+.env
+.env.*
+config.ini
+config.json
+
+# Test related files (if not running tests in Docker build)
+tests/
+test_*.py
+
+# Build artifacts
+dist/
+build/
+*.egg-info/

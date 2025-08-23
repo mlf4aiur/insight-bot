@@ -1,0 +1,136 @@
+services:
+  # --- OpenTelemetry Collector ---
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    environment:
+      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=${OPENSEARCH_INITIAL_ADMIN_PASSWORD}
+    volumes:
+      - ./monitoring_stack/otel-collector/otel-collector-config.yaml:/etc/otel-collector-config.yaml
+    ports:
+      - "4317:4317"  # OTLP gRPC receiver
+      - "4318:4318"  # OTLP http receiver
+      - "8889:8889"  # metrics endpoint
+
+  # # --- OpenSearch ---
+  # opensearch:
+  #   image: opensearchproject/opensearch:3
+  #   environment:
+  #     - discovery.type=single-node
+  #     - bootstrap.memory_lock=true  # along with the memlock settings below, disables swapping
+  #     - OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m
+  #     - OPENSEARCH_INITIAL_ADMIN_PASSWORD=${OPENSEARCH_INITIAL_ADMIN_PASSWORD}
+  #   ulimits:
+  #     memlock:
+  #       soft: -1
+  #       hard: -1
+  #   ports:
+  #     - "9200:9200"
+  #   # volumes:
+  #   #   - ./monitoring_stack/opensearch/data:/usr/share/opensearch/data
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-k", "-u", "admin:${OPENSEARCH_INITIAL_ADMIN_PASSWORD}", "https://localhost:9200"]
+  #     interval: 30s
+  #     retries: 3
+
+  # dashboards:
+  #   image: opensearchproject/opensearch-dashboards:3
+  #   ports:
+  #     - "5601:5601"
+  #   environment:
+  #     - OPENSEARCH_HOSTS=["https://opensearch:9200"]
+  #   depends_on:
+  #     - opensearch
+
+  # --- Prometheus ---
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring_stack/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+
+  # --- Jaeger ---
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    ports:
+      - "16686:16686"  # Jaeger UI
+      - "14250:14250"  # The gRPC port for the collector service
+      - "14268:14268"  # The HTTP port for the collector service
+
+  # --- Loki ---
+  loki:
+    image: grafana/loki:latest
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+
+  # --- Grafana ---
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    # volumes:
+    #   - ./monitoring_stack/grafana/data/:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+
+  setup-grafana:
+    image: alpine:3
+    container_name: setup-grafana
+    entrypoint: /grafana/setup-grafana.sh
+    depends_on:
+      - grafana
+    volumes:
+      - ./monitoring_stack/grafana/:/grafana/
+    restart: none
+
+  # --- Chatbot ---
+  # chatbot:
+  #   build:
+  #     context: ./chatbot
+  #     dockerfile: Dockerfile
+  #   environment:
+  #     - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+  #   ports:
+  #     - "8000:8000"
+
+  # --- Mock Service ---
+  user:
+    build:
+      context: ./mock_services/user
+      dockerfile: Dockerfile
+    # command: ["opentelemetry-instrument", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "5001"]
+    # volumes:
+    #   - ./mock_services/user/app:/app/app
+    environment:
+      - OTEL_SERVICE_NAME=user-service
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED=true
+      - OTEL_LOGS_EXPORTER=otlp
+      - OTEL_METRICS_EXPORTER=otlp
+      - OTEL_TRACES_EXPORTER=otlp
+      - PROFILE_SERVICE_URL=http://profile:5002
+    ports:
+      - "5001:5001"
+    depends_on:
+      - otel-collector
+
+  profile:
+    build:
+      context: ./mock_services/profile
+      dockerfile: Dockerfile
+    # command: ["opentelemetry-instrument", "flask", "--app=app.main", "run", "--host=0.0.0.0", "--port=5002"]
+    # volumes:
+    #   - ./mock_services/profile/app:/app/app
+    environment:
+      - OTEL_SERVICE_NAME=profile-service
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED=true
+      - OTEL_LOGS_EXPORTER=otlp
+      - OTEL_METRICS_EXPORTER=otlp
+      - OTEL_TRACES_EXPORTER=otlp
+    ports:
+      - "5002:5002"
+    depends_on:
+      - otel-collector

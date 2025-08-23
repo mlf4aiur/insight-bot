@@ -1,0 +1,75 @@
+extensions:
+  basicauth/opensearch:
+    client_auth:
+      username: admin
+      password: ${env:OPENSEARCH_INITIAL_ADMIN_PASSWORD}
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch: {}
+  memory_limiter:
+    check_interval: 5s
+    limit_percentage: 80
+    spike_limit_percentage: 25
+
+exporters:
+  debug:
+    verbosity: detailed
+  opensearch:
+    http:
+      endpoint: https://opensearch:9200
+      tls:
+        insecure_skip_verify : true
+      auth:
+        authenticator: basicauth/opensearch
+    logs_index: otel-logs
+    # logs_index_fallback: "default-service" # optional, if not set default is `unknown`
+    # logs_index_time_format: "yyyy.MM.dd" # optional, if set appends time suffix
+  otlphttp/loki:
+    endpoint: http://loki:3100/otlp
+    tls:
+      insecure: true
+  prometheus:
+    endpoint: 0.0.0.0:8889
+  otlp/jaeger:
+    endpoint: jaeger:4317
+    tls:
+      insecure: true
+
+service:
+  extensions: [basicauth/opensearch]
+  pipelines:
+    logs:
+      receivers:
+        - otlp
+      processors:
+        - batch
+        - memory_limiter
+      exporters:
+        # - debug
+        # - opensearch
+        - otlphttp/loki
+    metrics:
+      receivers:
+        - otlp
+      processors:
+        - batch
+        - memory_limiter
+      exporters:
+        # - debug
+        - prometheus
+    traces:
+      receivers:
+        - otlp
+      processors:
+        - batch
+        - memory_limiter
+      exporters:
+        # - debug
+        - otlp/jaeger
